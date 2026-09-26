@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "test": "node tests/seed.test.js"
+    "test": "node tests/seed.test.js && node tests/task1.test.js"
   },
   "dependencies": {
     "next": "14.2.35",
