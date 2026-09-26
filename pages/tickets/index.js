@@ -32,6 +32,12 @@ export default function TicketList() {
       router.push('/')
       return
     }
+    if (u.role !== 'student') {
+      if (u.role === 'technician') router.push('/technician/dashboard')
+      else if (u.role === 'admin') router.push('/admin/assign')
+      else router.push('/')
+      return
+    }
     setUser(u)
     load(u)
   }, [])
@@ -40,7 +46,9 @@ export default function TicketList() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/tickets?studentId=${u.id}`)
+      const res = await fetch(`/api/tickets?studentId=${u.id}&_t=${Date.now()}`, {
+        cache: 'no-store',
+      })
       if (!res.ok) throw new Error('Request failed')
       const data = await res.json()
       setTickets(data.tickets)
