@@ -4,7 +4,8 @@ import {
   findUser,
   CATEGORIES,
   PRIORITIES,
-} from '../../../lib/store'
+  MIN_DESCRIPTION_LENGTH,
+} from '../../../lib/store.js'
 
 export default function handler(req, res) {
   if (req.method === 'GET') return handleGet(req, res)
@@ -14,6 +15,7 @@ export default function handler(req, res) {
 }
 
 function handleGet(req, res) {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
   const { studentId, technicianId, unassigned } = req.query
   let result = tickets
 
@@ -29,27 +31,65 @@ function handlePost(req, res) {
   const { title, description, category, location, priority, studentId } =
     req.body || {}
 
-  if (!title || !title.trim() || !location || !location.trim()) {
-    return res.status(400).json({ error: 'Title and location are required.' })
+  // Identify the caller and enforce student role protection
+  const callerId = req.headers['x-user-id'] || studentId
+  if (!callerId) {
+    return res.status(400).json({ error: 'Student ID is required.' })
   }
-  if (category && !CATEGORIES.includes(category)) {
+  const student = findUser(callerId)
+  if (!student) {
+    return res.status(400).json({ error: 'Student account not found.' })
+  }
+  if (student.role !== 'student') {
+    return res.status(403).json({ error: 'Only students can create tickets.' })
+  }
+
+  // Required field validations
+  if (!title || typeof title !== 'string' || !title.trim()) {
+    return res.status(400).json({ error: 'Title is required.' })
+  }
+
+  if (!description || typeof description !== 'string' || !description.trim()) {
+    return res.status(400).json({ error: 'Description is required.' })
+  }
+
+  const trimmedDesc = description.trim()
+  if (trimmedDesc.length < MIN_DESCRIPTION_LENGTH) {
+    return res.status(400).json({
+      error: `Description must be at least ${MIN_DESCRIPTION_LENGTH} characters.`,
+    })
+  }
+
+  if (!category || typeof category !== 'string' || !category.trim()) {
+    return res.status(400).json({ error: 'Category is required.' })
+  }
+  if (!CATEGORIES.includes(category)) {
     return res.status(400).json({ error: 'Unknown category.' })
   }
-  if (priority && !PRIORITIES.includes(priority)) {
-    return res.status(400).json({ error: 'Unknown priority.' })
-  }
-  const now = new Date().toISOString()
-  const student = findUser(studentId)
 
+  if (!location || typeof location !== 'string' || !location.trim()) {
+    return res.status(400).json({ error: 'Location is required.' })
+  }
+
+  if (!priority || typeof priority !== 'string' || !priority.trim()) {
+    return res.status(400).json({ error: 'Priority is required.' })
+  }
+  if (!PRIORITIES.includes(priority)) {
+    return res.status(400).json({ error: 'Priority must be P1, P2, P3, or P4.' })
+  }
+
+  const now = new Date().toISOString()
+
+  // Default status must be 'Open'
   const ticket = {
     id: generateId(),
     title: title.trim(),
-    description: (description || '').trim(),
-    category: category || CATEGORIES[0],
+    description: trimmedDesc,
+    category,
     location: location.trim(),
-    priority: priority || 'P4',
+    priority,
     status: 'Open',
-    studentId: studentId || null,
+    studentId: student.id,
     technicianId: null,
     createdAt: now,
     updatedAt: now,
@@ -57,7 +97,7 @@ function handlePost(req, res) {
       {
         id: 'a1',
         type: 'created',
-        message: `Submitted by ${student ? student.name : 'student'}`,
+        message: `Submitted by ${student.name}`,
         at: now,
       },
     ],
